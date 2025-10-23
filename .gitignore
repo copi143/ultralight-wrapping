@@ -1,0 +1,11 @@
+/target
+/pack
+/ultralight
+
+.vscode
+
+libultralightui.so
+ultralightui.dll
+
+*.log
+*.sh
