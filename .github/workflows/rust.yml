@@ -15,30 +15,56 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
 
-      - name: Toolchain
-        uses: dtolnay/rust-toolchain@nightly
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
-      - name: Build
-        id: build
+      - name: Build for Linux
+        if: matrix.os == 'ubuntu-latest'
         run: |
-          cargo build --release
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "file=target/release/ultralightui.dll" >> "$GITHUB_OUTPUT"
-          elif [[ "$RUNNER_OS" == "macOS" ]]; then
-            echo "file=target/release/ultralightui.dylib" >> "$GITHUB_OUTPUT"
-          else
-            apt install patchelf
-            patchelf --set-rpath '$ORIGIN' target/release/libultralightui.so
-            echo "file=target/release/libultralightui.so" >> "$GITHUB_OUTPUT"
-          fi
+          cargo build --release --locked
+          apt install patchelf
+          patchelf --set-rpath '$ORIGIN' target/release/libultralightui.so
 
-      - name: Upload
+      - name: Build for Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          cargo build --release --locked
+
+      - name: Build for MacOS
+        if: matrix.os == 'macos-latest'
+        run: |
+          cargo build --release --locked
+
+      - name: Upload for Linux
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
           name: ultralightui-${{ matrix.os }}
-          path: ${{ steps.build.outputs.file }}
+          path: target/release/libultralightui.so
+
+      - name: Upload for Windows
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ultralightui-${{ matrix.os }}
+          path: target/release/ultralightui.dll
+
+      - name: Upload for MacOS
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ultralightui-${{ matrix.os }}
+          path: target/release/ultralightui.dylib
