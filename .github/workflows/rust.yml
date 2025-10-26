@@ -35,7 +35,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           cargo build --release --locked
-          apt install patchelf
+          sudo apt install patchelf
           patchelf --set-rpath '$ORIGIN' target/release/libultralightui.so
 
       - name: Build for Windows
@@ -67,4 +67,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ultralightui-${{ matrix.os }}
-          path: target/release/ultralightui.dylib
+          path: target/release/libultralightui.dylib
