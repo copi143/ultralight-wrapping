@@ -24,78 +24,90 @@ pub static RENDER_MUTEX: Mutex<
         )>,
     >,
 > = Mutex::new(None);
-pub static RENDER_COND: Condvar = Condvar::new();
+pub static RENDER_SEND_TASK_COND: Condvar = Condvar::new();
+pub static RENDER_RECV_STAT_COND: Condvar = Condvar::new();
 
+/// 添加一个任务到渲染线程队列，但不等待其完成
 pub fn renderer_pending(
     f: impl Fn(&mut HashMap<u32, View>, &mut HashMap<u32, Instant>, &mut bool) -> bool + Send + 'static,
-) {
+) -> bool {
     let mut lock = RENDER_MUTEX.lock();
-    let funcs = lock.as_mut().unwrap();
-    funcs.push((Box::new(f), None));
+    if let Some(funcs) = lock.as_mut() {
+        funcs.push((Box::new(f), None));
+        true
+    } else {
+        false
+    }
 }
 
+/// 添加一个任务到渲染线程队列，并等待其完成
 pub fn renderer_run(
     f: impl Fn(&mut HashMap<u32, View>, &mut HashMap<u32, Instant>, &mut bool) -> bool + Send + 'static,
-) {
-    let c = Arc::new(Condvar::new());
+) -> bool {
     let mut lock = RENDER_MUTEX.lock();
-    let funcs = lock.as_mut().unwrap();
-    funcs.push((Box::new(f), Some(c.clone())));
-    RENDER_COND.notify_one();
-    c.wait(&mut lock);
+    if let Some(funcs) = lock.as_mut() {
+        let c = Arc::new(Condvar::new());
+        funcs.push((Box::new(f), Some(c.clone())));
+        RENDER_SEND_TASK_COND.notify_one();
+        c.wait(&mut lock);
+        true
+    } else {
+        false
+    }
 }
 
-static EXIT_RENDERER: AtomicBool = AtomicBool::new(false);
+pub static EXIT_RENDERER: AtomicBool = AtomicBool::new(false);
 
+/// 启动无头 gl 渲染线程
 #[cfg(feature = "gl-headless")]
-#[gl_headless::gl_headless]
+#[gl_headless::gl_headless(version = "3.3")]
 pub fn renderer_main_wrapper() {
     renderer_main();
 }
 
+/// 启动无头 gl 渲染线程
 #[cfg(feature = "surfman")]
 pub fn renderer_main_wrapper() {
+    use surfman::{Connection, ContextAttributeFlags, ContextAttributes, GLVersion};
+
+    let connection = Connection::new().expect("Failed to create connection");
+
+    let adapter = connection.create_low_power_adapter().unwrap_or_else(|_| {
+        connection
+            .create_adapter()
+            .expect("Failed to create adapter")
+    });
+    let mut device = connection
+        .create_device(&adapter)
+        .expect("Failed to create device");
+
+    let ctx_desc = device
+        .create_context_descriptor(&ContextAttributes {
+            version: GLVersion::new(3, 3),
+            flags: ContextAttributeFlags::empty(),
+        })
+        .expect("Failed to create context descriptor");
+    let mut context = device
+        .create_context(&ctx_desc, None)
+        .expect("Failed to create GL context");
+
+    device
+        .make_context_current(&mut context)
+        .expect("Failed to make context current");
+
+    gl::load_with(|s| device.get_proc_address(&context, s) as *const _);
+
     renderer_main();
+
+    device.destroy_context(&mut context).unwrap();
 }
 
 #[allow(static_mut_refs)]
 fn renderer_main() {
-    #[cfg(feature = "surfman")]
-    let (device, mut context) = {
-        use surfman::{Connection, ContextAttributeFlags, ContextAttributes, GLVersion};
-
-        let connection = Connection::new().expect("Failed to create connection");
-
-        let adapter = connection
-            .create_low_power_adapter()
-            .expect("Failed to create adapter");
-        let mut device = connection
-            .create_device(&adapter)
-            .expect("Failed to create device");
-
-        let ctx_desc = device
-            .create_context_descriptor(&ContextAttributes {
-                version: GLVersion::new(4, 6),
-                flags: ContextAttributeFlags::empty(),
-            })
-            .expect("Failed to create context descriptor");
-        let mut context = device
-            .create_context(&ctx_desc, None)
-            .expect("Failed to create GL context");
-
-        device
-            .make_context_current(&mut context)
-            .expect("Failed to make context current");
-
-        gl::load_with(|s| device.get_proc_address(&context, s) as *const _);
-
-        unsafe {
-            let version = std::ffi::CStr::from_ptr(gl::GetString(gl::VERSION) as *const i8);
-            println!("GL version: {}", version.to_string_lossy());
-        }
-
-        (device, context)
-    };
+    unsafe {
+        let version = std::ffi::CStr::from_ptr(gl::GetString(gl::VERSION) as *const i8);
+        println!("GL version: {}", version.to_string_lossy());
+    }
 
     let lib = LIB.get().unwrap().clone();
     let (gpu_driver, mut gl_renderer) = create_gpu_driver();
@@ -125,8 +137,11 @@ fn renderer_main() {
 
     {
         let mut lock = RENDER_MUTEX.lock();
+        if lock.is_some() {
+            panic!("Renderer thread already running, pending tasks exist");
+        }
         *lock = Some(Vec::new());
-        RENDER_COND.notify_one();
+        RENDER_RECV_STAT_COND.notify_one();
     }
 
     let mut next_frame_time = Instant::now();
@@ -153,7 +168,9 @@ fn renderer_main() {
         }
 
         let mut lock = RENDER_MUTEX.lock();
-        let funcs = lock.take().unwrap();
+        let Some(funcs) = lock.take() else {
+            panic!("Renderer mutex corrupted");
+        };
         let mut next_funcs = Vec::new();
         let mut force_redraw = false;
         for (f, c) in funcs {
@@ -165,18 +182,26 @@ fn renderer_main() {
                 c.notify_one();
             }
         }
-        lock.replace(next_funcs);
+        if lock.replace(next_funcs).is_some() {
+            panic!("Renderer mutex corrupted");
+        }
 
         if force_redraw {
             wakeup_by_timeout = true; // 触发重绘
             continue;
         }
 
-        wakeup_by_timeout = RENDER_COND
+        wakeup_by_timeout = RENDER_SEND_TASK_COND
             .wait_until(&mut lock, next_frame_time)
             .timed_out();
     }
 
-    #[cfg(feature = "surfman")]
-    device.destroy_context(&mut context).unwrap();
+    {
+        let mut lock = RENDER_MUTEX.lock();
+        if lock.is_none() {
+            panic!("Renderer mutex corrupted at exit");
+        }
+        *lock = None;
+        RENDER_RECV_STAT_COND.notify_one();
+    }
 }

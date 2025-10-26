@@ -1,12 +1,18 @@
+surfman::declare_surfman!();
+
 use std::rc::Rc;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 use ul_next::config::FontHinting;
 use ul_next::{Config, Library, app::App, window::WindowFlags};
 
-use crate::render::{RENDER_COND, RENDER_MUTEX, renderer_main_wrapper};
+use crate::render::renderer_main_wrapper;
+use crate::render::{EXIT_RENDERER, RENDER_MUTEX, RENDER_RECV_STAT_COND, RENDER_SEND_TASK_COND};
 
 mod file;
 mod gpu;
+mod items;
 mod render;
 mod view;
 
@@ -116,7 +122,18 @@ extern "C" fn ultralightui_init() {
 
     let mut lock = RENDER_MUTEX.lock();
     while lock.is_none() {
-        RENDER_COND.wait(&mut lock);
+        RENDER_RECV_STAT_COND.wait_for(&mut lock, Duration::from_millis(100));
+    }
+}
+
+#[unsafe(no_mangle)]
+extern "C" fn ultralightui_exit() {
+    EXIT_RENDERER.store(true, Ordering::SeqCst);
+    RENDER_SEND_TASK_COND.notify_one();
+
+    let mut lock = RENDER_MUTEX.lock();
+    while lock.is_some() {
+        RENDER_RECV_STAT_COND.wait_for(&mut lock, Duration::from_millis(100));
     }
 }
 

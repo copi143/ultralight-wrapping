@@ -1,17 +1,11 @@
-// use std::collections::BTreeMap;
 use std::ffi::c_void;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Instant;
+use ul_next::event::{KeyEvent, KeyEventCreationInfo, KeyEventModifiers, KeyEventType};
 use ul_next::event::{MouseButton, MouseEvent, MouseEventType, ScrollEvent, ScrollEventType};
+use ul_next::key_code::VirtualKeyCode;
 use ul_next::view::ViewConfig;
-
-// pub struct Recipe {
-//     pub name: String,
-//     pub material: BTreeMap<String, u64>,
-//     pub products: BTreeMap<String, u64>,
-//     pub timecost: u64,
-// }
 
 use crate::render::{GL_RENDERER, UL_RENDERER, renderer_pending, renderer_run};
 use crate::{LIB, read_c_string};
@@ -159,31 +153,105 @@ extern "C" fn ultralightui_report_focus(view_id: u32, focused: u32) {
     });
 }
 
-// #[unsafe(no_mangle)]
-// extern "C" fn ultralightui_report_key_down(view_id: u32, key_code: u32, key_char: u16) {
-//     renderer_pending(move |views, _, _| {
-//         let lib = LIB.get().unwrap().clone();
-//         if let Some(view) = views.get(&view_id) {
-//             view.fire_key_event(
-//                 KeyEvent::new(
-//                     lib,
-//                     KeyEventCreationInfo {
-//                         ty: KeyEventType::KeyDown,
-//                         virtual_key_code: key_code,
-//                         native_key_code: 0,
-//                         text: String::from_utf16_lossy(&[key_char]),
-//                         unmodified_text: String::from_utf16_lossy(&[key_char]),
-//                         is_keypad: false,
-//                         is_auto_repeat: false,
-//                         modifiers: 0,
-//                     },
-//                 )
-//                 .unwrap(),
-//             );
-//         }
-//         false
-//     });
-// }
+#[unsafe(no_mangle)]
+extern "C" fn ultralightui_report_key_down(view_id: u32, scancode: u32, key_mods: u32) {
+    renderer_pending(move |views, views_updated, _| {
+        let lib = LIB.get().unwrap().clone();
+        if let Some(view) = views.get(&view_id) {
+            view.fire_key_event(
+                KeyEvent::new(
+                    lib,
+                    KeyEventCreationInfo {
+                        ty: KeyEventType::KeyDown,
+                        modifiers: KeyEventModifiers {
+                            alt: false,
+                            ctrl: false,
+                            meta: false,
+                            shift: false,
+                        },
+                        virtual_key_code: VirtualKeyCode::Unknown,
+                        native_key_code: scancode as i32,
+                        text: "",
+                        unmodified_text: "",
+                        is_keypad: false,
+                        is_auto_repeat: false,
+                        is_system_key: false,
+                    },
+                )
+                .unwrap(),
+            );
+            views_updated.insert(view_id, Instant::now());
+        }
+        false
+    });
+}
+
+#[unsafe(no_mangle)]
+extern "C" fn ultralightui_report_key_up(view_id: u32, scancode: u32, key_mods: u32) {
+    renderer_pending(move |views, views_updated, _| {
+        let lib = LIB.get().unwrap().clone();
+        if let Some(view) = views.get(&view_id) {
+            view.fire_key_event(
+                KeyEvent::new(
+                    lib,
+                    KeyEventCreationInfo {
+                        ty: KeyEventType::KeyUp,
+                        modifiers: KeyEventModifiers {
+                            alt: false,
+                            ctrl: false,
+                            meta: false,
+                            shift: false,
+                        },
+                        virtual_key_code: VirtualKeyCode::Unknown,
+                        native_key_code: scancode as i32,
+                        text: "",
+                        unmodified_text: "",
+                        is_keypad: false,
+                        is_auto_repeat: false,
+                        is_system_key: false,
+                    },
+                )
+                .unwrap(),
+            );
+            views_updated.insert(view_id, Instant::now());
+        }
+        false
+    });
+}
+
+#[unsafe(no_mangle)]
+extern "C" fn ultralightui_report_input(view_id: u32, text: *const u8) {
+    let text = read_c_string(text).to_string();
+    renderer_pending(move |views, views_updated, _| {
+        let lib = LIB.get().unwrap().clone();
+        if let Some(view) = views.get(&view_id) {
+            view.fire_key_event(
+                KeyEvent::new(
+                    lib,
+                    KeyEventCreationInfo {
+                        ty: KeyEventType::Char,
+                        modifiers: KeyEventModifiers {
+                            alt: false,
+                            ctrl: false,
+                            meta: false,
+                            shift: false,
+                        },
+                        virtual_key_code: VirtualKeyCode::Unknown,
+                        native_key_code: 0,
+                        text: &text,
+                        unmodified_text: &text,
+                        is_keypad: false,
+                        is_auto_repeat: false,
+                        is_system_key: false,
+                    },
+                )
+                .unwrap(),
+            );
+            views_updated.insert(view_id, Instant::now());
+        }
+        false
+    });
+}
 
 #[unsafe(no_mangle)]
 #[allow(static_mut_refs)]

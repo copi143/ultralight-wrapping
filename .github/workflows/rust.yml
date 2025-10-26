@@ -1,0 +1,44 @@
+name: Rust Cross-Platform Build
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Build
+        id: build
+        run: |
+          cargo build --release
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "file=target/release/ultralightui.dll" >> "$GITHUB_OUTPUT"
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            echo "file=target/release/ultralightui.dylib" >> "$GITHUB_OUTPUT"
+          else
+            apt install patchelf
+            patchelf --set-rpath '$ORIGIN' target/release/libultralightui.so
+            echo "file=target/release/libultralightui.so" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ultralightui-${{ matrix.os }}
+          path: ${{ steps.build.outputs.file }}
