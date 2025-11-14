@@ -34,7 +34,7 @@ jobs:
       - name: Build for Linux
         if: matrix.os == 'ubuntu-latest'
         run: |
-          sudo apt install patchelf libegl1-mesa-dev libxrandr-dev
+          sudo apt install patchelf libegl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libwayland-dev libxkbcommon-dev libxext-dev libxrender-dev libxfixes-dev libxft-dev libxau-dev libxdmcp-dev xorg-dev
           mkdir artifacts
           # feature=default
           cargo build --release --locked
