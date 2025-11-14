@@ -34,7 +34,7 @@ jobs:
       - name: Build for Linux
         if: matrix.os == 'ubuntu-latest'
         run: |
-          sudo apt install patchelf
+          sudo apt install patchelf libegl1-mesa-dev
           mkdir artifacts
           # feature=default
           cargo build --release --locked
