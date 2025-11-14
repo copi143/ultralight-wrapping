@@ -1,3 +1,4 @@
+#[cfg(feature = "surfman")]
 surfman::declare_surfman!();
 
 use std::rc::Rc;
@@ -12,7 +13,9 @@ use crate::render::{EXIT_RENDERER, RENDER_MUTEX, RENDER_RECV_STAT_COND, RENDER_S
 
 mod file;
 mod gpu;
+mod helper;
 mod items;
+mod js;
 mod render;
 mod view;
 
@@ -113,13 +116,25 @@ extern "C" fn ultralightui_open_window(url: *const u8) {
 #[unsafe(no_mangle)]
 extern "C" fn ultralightui_init() {
     unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
+}
 
+#[unsafe(no_mangle)]
+extern "C" fn ultralightui_client_init() {
     LIB.set(Library::linked())
         .map_err(|_| "Library already initialized")
         .unwrap();
+}
 
-    std::thread::spawn(renderer_main_wrapper);
+#[unsafe(no_mangle)]
+extern "C" fn ultralightui_server_init() {}
 
+#[unsafe(no_mangle)]
+extern "C" fn ultralightui_into_render_main() {
+    renderer_main_wrapper();
+}
+
+#[unsafe(no_mangle)]
+extern "C" fn ultralightui_wait_render_init() {
     let mut lock = RENDER_MUTEX.lock();
     while lock.is_none() {
         RENDER_RECV_STAT_COND.wait_for(&mut lock, Duration::from_millis(100));

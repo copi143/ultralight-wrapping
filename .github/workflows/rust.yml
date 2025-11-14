@@ -34,37 +34,76 @@ jobs:
       - name: Build for Linux
         if: matrix.os == 'ubuntu-latest'
         run: |
-          cargo build --release --locked
           sudo apt install patchelf
+          mkdir artifacts
+          # feature=default
+          cargo build --release --locked
           patchelf --set-rpath '$ORIGIN' target/release/libultralightui.so
+          cp target/release/libultralightui.so artifacts/libultralightui.so
+          # feature=native
+          cargo build --release --locked --no-default-features --features native
+          patchelf --set-rpath '$ORIGIN' target/release/libultralightui.so
+          cp target/release/libultralightui.so artifacts/libultralightui.native.so
+          # feature=gl-headless
+          cargo build --release --locked --no-default-features --features gl-headless
+          patchelf --set-rpath '$ORIGIN' target/release/libultralightui.so
+          cp target/release/libultralightui.so artifacts/libultralightui.gl-headless.so
+          # feature=surfman
+          cargo build --release --locked --no-default-features --features surfman
+          patchelf --set-rpath '$ORIGIN' target/release/libultralightui.so
+          cp target/release/libultralightui.so artifacts/libultralightui.surfman.so
 
       - name: Build for Windows
         if: matrix.os == 'windows-latest'
         run: |
+          mkdir artifacts
+          # feature=default
           cargo build --release --locked
+          cp target/release/ultralightui.dll artifacts/ultralightui.dll
+          # feature=native
+          cargo build --release --locked --no-default-features --features native
+          cp target/release/ultralightui.dll artifacts/ultralightui.native.dll
+          # feature=gl-headless
+          cargo build --release --locked --no-default-features --features gl-headless
+          cp target/release/ultralightui.dll artifacts/ultralightui.gl-headless.dll
+          # feature=surfman
+          cargo build --release --locked --no-default-features --features surfman
+          cp target/release/ultralightui.dll artifacts/ultralightui.surfman.dll
 
       - name: Build for MacOS
         if: matrix.os == 'macos-latest'
         run: |
+          mkdir artifacts
+          # feature=default
           cargo build --release --locked
+          cp target/release/libultralightui.dylib artifacts/libultralightui.dylib
+          # feature=native
+          cargo build --release --locked --no-default-features --features native
+          cp target/release/libultralightui.dylib artifacts/libultralightui.native.dylib
+          # feature=gl-headless
+          cargo build --release --locked --no-default-features --features gl-headless
+          cp target/release/libultralightui.dylib artifacts/libultralightui.gl-headless.dylib
+          # feature=surfman
+          cargo build --release --locked --no-default-features --features surfman
+          cp target/release/libultralightui.dylib artifacts/libultralightui.surfman.dylib
 
       - name: Upload for Linux
         if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
           name: ultralightui-${{ matrix.os }}
-          path: target/release/libultralightui.so
+          path: artifacts/
 
       - name: Upload for Windows
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
           name: ultralightui-${{ matrix.os }}
-          path: target/release/ultralightui.dll
+          path: artifacts/
 
       - name: Upload for MacOS
         if: matrix.os == 'macos-latest'
         uses: actions/upload-artifact@v4
         with:
           name: ultralightui-${{ matrix.os }}
-          path: target/release/libultralightui.dylib
+          path: artifacts/

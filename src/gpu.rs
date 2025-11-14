@@ -59,8 +59,8 @@ fn compile_shader(src: &str, ty: GLenum) -> GLuint {
         if success != gl::TRUE as GLint {
             let mut len = 0;
             gl::GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut len);
-            let mut buffer = Vec::with_capacity(len as usize);
-            buffer.set_len((len as usize) - 1);
+            let mut buffer = vec![0; len as usize];
+            buffer.set_len(len as usize - 1);
             gl::GetShaderInfoLog(shader, len, null_mut(), buffer.as_mut_ptr() as *mut GLchar);
             panic!("Shader compile error: {}", String::from_utf8_lossy(&buffer));
         }
@@ -81,8 +81,8 @@ fn link_program(vs: GLuint, fs: GLuint) -> GLuint {
         if success != gl::TRUE as GLint {
             let mut len = 0;
             gl::GetProgramiv(program, gl::INFO_LOG_LENGTH, &mut len);
-            let mut buffer = Vec::with_capacity(len as usize);
-            buffer.set_len((len as usize) - 1);
+            let mut buffer = vec![0; len as usize];
+            buffer.set_len(len as usize - 1);
             gl::GetProgramInfoLog(program, len, null_mut(), buffer.as_mut_ptr() as *mut GLchar);
             panic!("Program link error: {}", String::from_utf8_lossy(&buffer));
         }

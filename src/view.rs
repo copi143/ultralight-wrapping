@@ -25,7 +25,9 @@ extern "C" fn ultralightui_create_view(
     let id_clone = id.clone();
     renderer_run(move |views, views_updated, _| {
         let lib = LIB.get().unwrap().clone();
-        let renderer = unsafe { UL_RENDERER.as_ref().unwrap() };
+        let Some(renderer) = (unsafe { UL_RENDERER }) else {
+            panic!("UL Renderer not initialized");
+        };
 
         let view_config = ViewConfig::start()
             .is_accelerated(true)
@@ -153,6 +155,24 @@ extern "C" fn ultralightui_report_focus(view_id: u32, focused: u32) {
     });
 }
 
+const GLFW_MOD_SHIFT: u32 = 0x0001;
+const GLFW_MOD_CONTROL: u32 = 0x0002;
+const GLFW_MOD_ALT: u32 = 0x0004;
+const GLFW_MOD_SUPER: u32 = 0x0008;
+const GLFW_MOD_CAPS_LOCK: u32 = 0x0010;
+const GLFW_MOD_NUM_LOCK: u32 = 0x0020;
+
+fn parse_glfw_modifiers(key_mods: u32) -> KeyEventModifiers {
+    let _ = key_mods & GLFW_MOD_CAPS_LOCK;
+    let _ = key_mods & GLFW_MOD_NUM_LOCK;
+    KeyEventModifiers {
+        alt: key_mods & GLFW_MOD_ALT != 0,
+        ctrl: key_mods & GLFW_MOD_CONTROL != 0,
+        meta: key_mods & GLFW_MOD_SUPER != 0,
+        shift: key_mods & GLFW_MOD_SHIFT != 0,
+    }
+}
+
 #[unsafe(no_mangle)]
 extern "C" fn ultralightui_report_key_down(view_id: u32, scancode: u32, key_mods: u32) {
     renderer_pending(move |views, views_updated, _| {
@@ -163,12 +183,7 @@ extern "C" fn ultralightui_report_key_down(view_id: u32, scancode: u32, key_mods
                     lib,
                     KeyEventCreationInfo {
                         ty: KeyEventType::KeyDown,
-                        modifiers: KeyEventModifiers {
-                            alt: false,
-                            ctrl: false,
-                            meta: false,
-                            shift: false,
-                        },
+                        modifiers: parse_glfw_modifiers(key_mods),
                         virtual_key_code: VirtualKeyCode::Unknown,
                         native_key_code: scancode as i32,
                         text: "",
@@ -196,12 +211,7 @@ extern "C" fn ultralightui_report_key_up(view_id: u32, scancode: u32, key_mods: 
                     lib,
                     KeyEventCreationInfo {
                         ty: KeyEventType::KeyUp,
-                        modifiers: KeyEventModifiers {
-                            alt: false,
-                            ctrl: false,
-                            meta: false,
-                            shift: false,
-                        },
+                        modifiers: parse_glfw_modifiers(key_mods),
                         virtual_key_code: VirtualKeyCode::Unknown,
                         native_key_code: scancode as i32,
                         text: "",
@@ -260,8 +270,16 @@ extern "C" fn ultralightui_copy_from_view(view_id: u32, buf_ptr: *mut c_void, bu
     renderer_run(move |views, _, _| {
         if let Some(view) = views.get(&view_id) {
             let target = view.render_target().unwrap();
-            let renderer = unsafe { GL_RENDERER.as_ref().unwrap() };
-            let tex = renderer.get_texture_handle(target.texture_id).unwrap();
+            let Some(renderer) = (unsafe { GL_RENDERER }) else {
+                panic!("GL Renderer not initialized");
+            };
+            let Some(tex) = renderer.get_texture_handle(target.texture_id) else {
+                let buf_ptr = buf_ptr as *mut u8;
+                for i in 0..buf_size {
+                    unsafe { *buf_ptr.add(i) = 0 };
+                }
+                return false;
+            };
             let width = target.width as usize;
             let height = target.height as usize;
             if buf_size < width * height * 4 {
