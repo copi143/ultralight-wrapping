@@ -198,6 +198,7 @@ pub fn renderer_main_wrapper() {
 }
 
 /// 启动无头 gl 渲染线程
+/// - TODO: FIXME
 #[cfg(all(feature = "native", target_os = "macos"))]
 pub fn renderer_main_wrapper() {
     use cocoa::appkit::{
@@ -219,8 +220,8 @@ pub fn renderer_main_wrapper() {
 
     let window: id = unsafe {
         NSWindow::alloc(nil).initWithContentRect_styleMask_backing_defer_(
-            NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1.0, 1.0)), // 无大小的窗口
-            0,                                                          // 无边框窗口
+            NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1.0, 1.0)),
+            0,
             NSBackingStoreBuffered,
             false,
         )

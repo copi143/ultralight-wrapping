@@ -18,7 +18,7 @@ ul-next = { version = "0.5.4" }
 arboard = "3.6.1"
 gl = "0.14.0"
 gl-headless = { version = "0.2.2", optional = true }
-surfman = { version = "0.10.0", features = ["sm-x11"], optional = true }
+surfman = { version = "0.11.0", features = ["sm-x11"], optional = true }
 parking_lot = { version = "0.12.5", features = ["nightly"] }
 png = "0.18.0"
 serde = { version = "1.0.228", features = ["derive"] }
